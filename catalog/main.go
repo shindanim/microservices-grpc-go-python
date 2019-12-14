@@ -47,25 +47,30 @@ func getFakeProducts() []*pb.Product {
 	return []*pb.Product{&p1, &p2, &p3}
 }
 
-func getProductsWithDiscountApplied(customer pb.Customer, products []*pb.Product) []*pb.Product {
+func getProductsWithDiscountApplied(customer pb.Customer, products []*pb.Product) ([]*pb.Product, error) {
 	host := os.Getenv("DISCOUNT_SERVICE_HOST")
 	if len(host) == 0 {
 		host = "localhost:11443"
 	}
+	log.Println("Before calling python function")
 	conn, err := getDiscountConnection(host)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
+		conn.Close()
 	}
 	defer conn.Close()
 
+	log.Println("After calling python function")
 	c := pb.NewDiscountClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
+	log.Println("After context calling")
 	productsWithDiscountApplied := make([]*pb.Product, 0)
 	for _, product := range products {
 		r, err := c.ApplyDiscount(ctx, &pb.DiscountRequest{Customer: &customer, Product: product})
 		if err == nil {
+			log.Println("Success to apply discount")
 			productsWithDiscountApplied = append(productsWithDiscountApplied, r.GetProduct())
 		} else {
 			log.Println("Failed to apply discount.", err)
@@ -73,12 +78,13 @@ func getProductsWithDiscountApplied(customer pb.Customer, products []*pb.Product
 	}
 
 	if len(productsWithDiscountApplied) > 0 {
-		return productsWithDiscountApplied
+		return productsWithDiscountApplied, nil
 	}
-	return products
+	return nil, errors.New("can't work with properly")
 }
 
 func handleGetProducts(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("start handleGetProducts")
 	products := getFakeProducts()
 	w.Header().Set("Content-Type", "application/json")
 
@@ -99,8 +105,14 @@ func handleGetProducts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	productsWithDiscountApplied := getProductsWithDiscountApplied(customer, products)
-	json.NewEncoder(w).Encode(productsWithDiscountApplied)
+	productsWithDiscountApplied, appliedErr := getProductsWithDiscountApplied(customer, products)
+	if appliedErr != nil {
+		http.Error(w, "something wrong with service", http.StatusBadRequest)
+	}
+
+	if appliedErr == nil {
+		json.NewEncoder(w).Encode(productsWithDiscountApplied)
+	}
 }
 
 func main() {

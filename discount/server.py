@@ -3,6 +3,7 @@ import time
 import os
 import grpc
 import decimal
+import logging
 import ecommerce_pb2
 import ecommerce_pb2_grpc
 from concurrent import futures
@@ -14,17 +15,21 @@ class Ecommerce(ecommerce_pb2_grpc.DiscountServicer):
         product = request.product
         discount = ecommerce_pb2.DiscountValue()
         if customer.id == 1 and product.price_in_cents > 0:
-            percentual = decimal.Decimal(10) / 100  # save 10%
+            percentual = decimal.Decimal(20) / 100  # save 10%
+            print(percentual)
             price = decimal.Decimal(product.price_in_cents) / 100
             new_price = price - (price * percentual)
             value_in_cents = int(new_price * 100)
+            print('before calling DiscountValue')
             discount = ecommerce_pb2.DiscountValue(pct=percentual, value_in_cents=value_in_cents)
 
+            print('after calling DiscountValue')
         new_product = ecommerce_pb2.Product(id=product.id,
             slug=product.slug,
             description=product.description,
             price_in_cents=product.price_in_cents,
             discount_value=discount)
+        print('before return function ')
         return ecommerce_pb2.DiscountResponse(product=new_product)
 
 
@@ -42,12 +47,14 @@ def get_server(host):
 
 
 if __name__ == '__main__':
+    #logging.info('python main started')
+    print('Python main started')
     port = sys.argv[1] if len(sys.argv) > 1 else 443
     host = '[::]:%s' % port
     server = get_server(host)
     try:
         server.start()
-        print('Running Discount service on %s' % host)
+        print('Running Discounting service on %s' % host)
         while True:
             time.sleep(1)
     except Exception as e:

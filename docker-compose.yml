@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile.discount
     ports:
       - 11443:11443
+    environment:
+     - PYTHONUNBUFFERED=1
   catalog:
     build:
       context: .
